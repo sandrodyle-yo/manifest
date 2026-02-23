@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MANIFEST — Drum Pad</title>
+
+  <style>
+    :root{
+      --bg:#9a9a9a;
+      --pad:#cfcac6;
+      --text:#111;
+      --shadow-dark: rgba(0,0,0,.55);
+      --shadow-soft: rgba(0,0,0,.25);
+
+      --ok:#39d353;
+      --bad:#ff4d4d;
+    }
+
+    *{ box-sizing:border-box; }
+
+    /* ✅ Fullscreen layout (desktop + mobile) */
+    body{
+      margin:0;
+      min-height:100vh;
+      width:100vw;
+      background:#1b1b1b;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      overflow:hidden;
+
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    /* блюр панели когда открыт поп-ап */
+    body.modal-open .panel{
+      filter: blur(10px);
+      transform: scale(0.995);
+      transition: filter .18s ease, transform .18s ease;
+    }
+
+    /* ✅ Панель на весь экран */
+    .panel{
+      width:100vw;
+      height:100vh;
+      background:var(--bg);
+      position:relative;
+      box-shadow:none;
+
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+
+      transition: filter .18s ease, transform .18s ease;
+    }
+
+    /* Подсказка по центру сверху + белая подложка */
+    .hint{
+      position:absolute;
+      top:20px;
+      left:50%;
+      transform:translateX(-50%);
+      background:#ffffff;
+      color:#111;
+      padding:10px 16px;
+      border-radius:12px;
+      font-size:14px;
+      font-weight:500;
+      box-shadow:0 8px 18px rgba(0,0,0,.15);
+      user-select:none;
+      text-align:center;
+      max-width: min(520px, 86vw);
+    }
+
+    /* ✅ Сетка адаптивная */
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:20px;
+      width:min(600px, 90vw);
+    }
+
+    .pad{
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border:0;
+      cursor:pointer;
+      border-radius:14px;
+      background:transparent;
+      padding:0;
+      position:relative;
+      outline:none;
+      -webkit-tap-highlight-color: transparent;
+      user-select:none;
+    }
+
+    .pad::before{
+      content:"";
+      position:absolute;
+      inset:-10px;
+      border-radius:18px;
+      background:#0c0c0c;
+      box-shadow:
+        0 22px 22px var(--shadow-dark),
+        0 8px 12px var(--shadow-soft);
+      z-index:0;
+    }
+
+    .pad .face{
+      position:absolute;
+      inset:0;
+      border-radius:14px;
+      background:var(--pad);
+      z-index:1;
+      display:grid;
+      place-items:center;
+      color:var(--text);
+      font-size:22px;
+      font-weight:600;
+      box-shadow:
+        inset 0 10px 16px rgba(255,255,255,.55),
+        inset 0 -10px 18px rgba(0,0,0,.20);
+      transition: transform .06s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
+    }
+
+    .pad .face::after{
+      content:"";
+      position:absolute;
+      inset:10px;
+      border-radius:12px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
+      opacity:.45;
+      pointer-events:none;
+    }
+
+    .pad:active .face{
+      transform: translateY(2px);
+      box-shadow:
+        inset 0 6px 10px rgba(255,255,255,.45),
+        inset 0 -14px 22px rgba(0,0,0,.28);
+    }
+
+    .pad.playing .face{
+      transform: translateY(1px);
+      box-shadow:
+        inset 0 10px 16px rgba(255,255,255,.55),
+        inset 0 -10px 18px rgba(0,0,0,.20),
+        0 0 0 3px rgba(0,0,0,.18);
+    }
+
+    .pad.locked .face{
+      background: var(--ok);
+      color:#0b0b0b;
+      box-shadow:
+        inset 0 10px 16px rgba(255,255,255,.35),
+        inset 0 -10px 18px rgba(0,0,0,.22),
+        0 0 0 3px rgba(255,255,255,.18);
+    }
+
+    .pad.error .face{
+      background: var(--bad);
+      color:#0b0b0b;
+      box-shadow:
+        inset 0 10px 16px rgba(255,255,255,.25),
+        inset 0 -10px 18px rgba(0,0,0,.28),
+        0 0 0 3px rgba(255,255,255,.16);
+    }
+
+    .footer{
+      position:absolute;
+      left:0; right:0;
+      bottom:16px;
+      text-align:center;
+      font-size:18px;
+      letter-spacing:.8px;
+      color:#101010;
+      opacity:.9;
+      user-select:none;
+    }
+
+    /* поп-ап */
+    .overlay{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      background: rgba(0,0,0,.35);
+      z-index:999;
+    }
+    .overlay.open{ display:flex; }
+
+    .modal{
+      width:min(520px, 92vw);
+      background:#fff;
+      color:#111;
+      border-radius:16px;
+      padding:22px 20px 18px;
+      box-shadow: 0 22px 60px rgba(0,0,0,.35);
+      text-align:center;
+      position:relative;
+      z-index:1001;
+    }
+    .modal b{
+      display:block;
+      font-size:16px;
+      line-height:1.35;
+      margin-bottom:10px;
+    }
+    .modal p{
+      margin:0 0 16px 0;
+      font-size:14px;
+      line-height:1.45;
+      opacity:.95;
+    }
+    .modal a.btn{
+      display:inline-block;
+      background:#111;
+      color:#fff;
+      text-decoration:none;
+      font-weight:700;
+      border-radius:12px;
+      padding:12px 18px;
+      min-width: 180px;
+    }
+    .modal a.btn:hover{ background:#000; }
+
+    /* Canvas для конфетти */
+    #confettiCanvas{
+      position:fixed;
+      inset:0;
+      width:100vw;
+      height:100vh;
+      z-index:1000;
+      pointer-events:none;
+      display:none;
+    }
+
+    /* ✅ Mobile tweaks */
+    @media (max-width: 768px){
+      .grid{
+        width:92vw;
+        gap:16px;
+      }
+      .pad .face{
+        font-size:20px;
+      }
+      .hint{
+        top:14px;
+        font-size:13px;
+        padding:8px 14px;
+        border-radius:12px;
+      }
+      .footer{
+        font-size:16px;
+        bottom:14px;
+      }
+    }
+
+    @media (max-width: 380px){
+      .grid{ gap:14px; }
+      .pad::before{ inset:-8px; }
+      .pad .face{ border-radius:12px; }
+      .pad{ border-radius:12px; }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="confettiCanvas"></canvas>
+
+  <div class="panel">
+    <div class="hint" id="hint">Нажми звуки в правильном порядке</div>
+
+    <div class="grid">
+      <button class="pad" data-id="1" aria-label="Pad 1"><span class="face">1</span></button>
+      <button class="pad" data-id="2" aria-label="Pad 2"><span class="face">2</span></button>
+      <button class="pad" data-id="3" aria-label="Pad 3"><span class="face">3</span></button>
+      <button class="pad" data-id="4" aria-label="Pad 4"><span class="face">4</span></button>
+    </div>
+
+    <div class="footer">DYLE - MANIFEST</div>
+  </div>
+
+  <!-- модалка победы -->
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <b id="modalTitle">Раз ты дошел до сюда, это о многом говорит.</b>
+      <p>Жду тебя в моем личный телеграм канале, там найдешь ссылку на пресейв. Спасибо тебе большое за интерес!</p>
+      <a class="btn" href="https://t.me/dyleofficial" target="_blank" rel="noopener">Перейти</a>
+    </div>
+  </div>
+
+  <script>
+    // ===== НАСТРОЙКА =====
+    const sounds = {
+      "1": "audio/s1.mp3",
+      "2": "audio/s2.mp3",
+      "3": "audio/s3.mp3",
+      "4": "audio/s4.mp3",
+    };
+
+    // верная последовательность: 2,4,3,1
+    const correctSequence = ["2","4","3","1"];
+
+    // ===== ЛОГИКА =====
+    const pads = Array.from(document.querySelectorAll(".pad"));
+    const hint = document.getElementById("hint");
+    const overlay = document.getElementById("overlay");
+
+    const audioMap = new Map();
+    Object.entries(sounds).forEach(([id, src]) => {
+      const a = new Audio(src);
+      a.preload = "auto";
+      audioMap.set(id, a);
+    });
+
+    let input = [];
+    let currentlyPlayingId = null;
+    let hintTimer = null;
+
+    // ждём окончания последнего звука перед поп-апом
+    let pendingWin = false;
+    let pendingWinPadId = null;
+
+    // ===== Конфетти =====
+    const confettiCanvas = document.getElementById("confettiCanvas");
+    const cctx = confettiCanvas.getContext("2d");
+    let confettiRAF = null;
+
+    function resizeConfetti() {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      confettiCanvas.width = Math.floor(window.innerWidth * dpr);
+      confettiCanvas.height = Math.floor(window.innerHeight * dpr);
+      confettiCanvas.style.width = window.innerWidth + "px";
+      confettiCanvas.style.height = window.innerHeight + "px";
+      cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener("resize", resizeConfetti);
+    resizeConfetti();
+
+    function rand(min, max){ return Math.random() * (max - min) + min; }
+
+    function burstConfettiSide(side){
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+
+      const originX = (side === "left") ? 40 : (W - 40);
+      const originY = Math.floor(H * 0.45);
+
+      const count = 90;
+      const particles = [];
+      const colors = ["#ff4d4d","#39d353","#4da3ff","#ffd24d","#b84dff","#ff7ad9","#ffffff"];
+
+      for (let i=0;i<count;i++){
+        const angleBase = (side === "left") ? 0 : Math.PI;
+        const angleSpread = Math.PI / 2.6;
+        const angle = angleBase + rand(-angleSpread/2, angleSpread/2);
+        const speed = rand(6, 12);
+
+        particles.push({
+          x: originX,
+          y: originY,
+          vx: Math.cos(angle) * speed + rand(-0.6,0.6),
+          vy: Math.sin(angle) * speed + rand(-0.6,0.6),
+          g: rand(0.18, 0.28),
+          w: rand(6, 11),
+          h: rand(3, 7),
+          rot: rand(0, Math.PI),
+          vr: rand(-0.18, 0.18),
+          color: colors[(Math.random()*colors.length)|0],
+          life: rand(55, 85)
+        });
+      }
+      return particles;
+    }
+
+    function runConfettiOnce(){
+      confettiCanvas.style.display = "block";
+      if (confettiRAF) cancelAnimationFrame(confettiRAF);
+
+      let parts = [...burstConfettiSide("left"), ...burstConfettiSide("right")];
+
+      function tick(){
+        cctx.clearRect(0,0, window.innerWidth, window.innerHeight);
+
+        parts = parts.filter(p => p.life > 0);
+        for (const p of parts){
+          p.life -= 1;
+          p.vy += p.g;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.rot += p.vr;
+
+          cctx.save();
+          cctx.translate(p.x, p.y);
+          cctx.rotate(p.rot);
+          cctx.fillStyle = p.color;
+          cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+          cctx.restore();
+        }
+
+        if (parts.length > 0){
+          confettiRAF = requestAnimationFrame(tick);
+        } else {
+          cctx.clearRect(0,0, window.innerWidth, window.innerHeight);
+          confettiCanvas.style.display = "none";
+          confettiRAF = null;
+        }
+      }
+
+      tick();
+    }
+
+    // ===== Вспомогательные функции =====
+    function getPadEl(id){
+      return pads.find(p => p.dataset.id === id) || null;
+    }
+
+    function clearPlaying(){
+      pads.forEach(p => p.classList.remove("playing"));
+      currentlyPlayingId = null;
+    }
+
+    function setPlaying(id){
+      pads.forEach(p => p.classList.remove("playing"));
+      const el = getPadEl(id);
+      if (el) el.classList.add("playing");
+      currentlyPlayingId = id;
+    }
+
+    function stopAllAudio(){
+      audioMap.forEach((a) => {
+        a.pause();
+        a.currentTime = 0;
+      });
+      clearPlaying();
+    }
+
+    function play(id){
+      stopAllAudio();
+      const a = audioMap.get(id);
+      if (!a) return;
+
+      setPlaying(id);
+
+      a.onended = () => {
+        if (currentlyPlayingId === id) clearPlaying();
+        if (pendingWin && pendingWinPadId === id) {
+          pendingWin = false;
+          pendingWinPadId = null;
+          openModalWithConfetti();
+        }
+      };
+
+      a.play().catch(()=>{});
+    }
+
+    function lockPad(id){
+      const el = getPadEl(id);
+      if (el) el.classList.add("locked");
+    }
+
+    function clearLocks(){
+      pads.forEach(p => p.classList.remove("locked"));
+    }
+
+    function flashError(id){
+      const el = getPadEl(id);
+      if (!el) return;
+      el.classList.add("error");
+      setTimeout(() => el.classList.remove("error"), 1000);
+    }
+
+    function setHint(text){
+      hint.textContent = text;
+    }
+
+    function setHintLater(text, ms){
+      if (hintTimer) clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => {
+        hint.textContent = text;
+        hintTimer = null;
+      }, ms);
+    }
+
+    function resetProgress(updateHintText = true){
+      input = [];
+      clearLocks();
+      stopAllAudio();
+      pendingWin = false;
+      pendingWinPadId = null;
+
+      if (updateHintText) setHint("Нажми звуки в правильном порядке");
+    }
+
+    function checkPrefix(){
+      for (let i = 0; i < input.length; i++){
+        if (input[i] !== correctSequence[i]) return false;
+      }
+      return true;
+    }
+
+    function openModalWithConfetti(){
+      document.body.classList.add("modal-open");
+      overlay.classList.add("open");
+      runConfettiOnce();
+    }
+
+    // ===== События =====
+    pads.forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (pendingWin) return; // пока доигрывает последний звук
+
+        const id = btn.dataset.id;
+
+        play(id);
+        input.push(id);
+
+        if (!checkPrefix()){
+          flashError(id);
+          setHint("Мимо. Прогресс сброшен.");
+          resetProgress(false);
+          setHintLater("Нажми звуки в правильном порядке", 2000);
+          return;
+        }
+
+        lockPad(id);
+
+        if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+
+        if (input.length === correctSequence.length){
+          setHint("Порядок собран ✅");
+          pendingWin = true;
+          pendingWinPadId = id;
+
+          // подстраховка, если по каким-то причинам звук не найден
+          const a = audioMap.get(id);
+          if (!a){
+            pendingWin = false;
+            pendingWinPadId = null;
+            openModalWithConfetti();
+          }
+          return;
+        }
+
+        setHint(`Верно. Шаг ${input.length}/${correctSequence.length}`);
+      });
+    });
+
+    // старт
+    resetProgress(true);
+  </script>
+</body>
+</html>
