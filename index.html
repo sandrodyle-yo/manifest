@@ -19,7 +19,6 @@
 
     *{ box-sizing:border-box; }
 
-    /* ✅ Fullscreen layout (desktop + mobile) */
     body{
       margin:0;
       min-height:100vh;
@@ -33,20 +32,17 @@
       justify-content:center;
     }
 
-    /* блюр панели когда открыт поп-ап */
     body.modal-open .panel{
       filter: blur(10px);
       transform: scale(0.995);
       transition: filter .18s ease, transform .18s ease;
     }
 
-    /* ✅ Панель на весь экран */
     .panel{
       width:100vw;
       height:100vh;
       background:var(--bg);
       position:relative;
-      box-shadow:none;
 
       display:flex;
       flex-direction:column;
@@ -57,7 +53,6 @@
       transition: filter .18s ease, transform .18s ease;
     }
 
-    /* Подсказка по центру сверху + белая подложка */
     .hint{
       position:absolute;
       top:20px;
@@ -75,7 +70,6 @@
       max-width: min(520px, 86vw);
     }
 
-    /* ✅ Сетка адаптивная */
     .grid{
       display:grid;
       grid-template-columns: repeat(2, 1fr);
@@ -143,6 +137,7 @@
         inset 0 -14px 22px rgba(0,0,0,.28);
     }
 
+    /* играет */
     .pad.playing .face{
       transform: translateY(1px);
       box-shadow:
@@ -151,6 +146,7 @@
         0 0 0 3px rgba(0,0,0,.18);
     }
 
+    /* выбран (заполняем последовательность) */
     .pad.locked .face{
       background: var(--ok);
       color:#0b0b0b;
@@ -160,7 +156,8 @@
         0 0 0 3px rgba(255,255,255,.18);
     }
 
-    .pad.error .face{
+    /* массовая ошибка (все становятся красными) */
+    .pad.fail .face{
       background: var(--bad);
       color:#0b0b0b;
       box-shadow:
@@ -240,25 +237,11 @@
       display:none;
     }
 
-    /* ✅ Mobile tweaks */
     @media (max-width: 768px){
-      .grid{
-        width:92vw;
-        gap:16px;
-      }
-      .pad .face{
-        font-size:20px;
-      }
-      .hint{
-        top:14px;
-        font-size:13px;
-        padding:8px 14px;
-        border-radius:12px;
-      }
-      .footer{
-        font-size:16px;
-        bottom:14px;
-      }
+      .grid{ width:92vw; gap:16px; }
+      .pad .face{ font-size:20px; }
+      .hint{ top:14px; font-size:13px; padding:8px 14px; }
+      .footer{ font-size:16px; bottom:14px; }
     }
 
     @media (max-width: 380px){
@@ -274,7 +257,7 @@
   <canvas id="confettiCanvas"></canvas>
 
   <div class="panel">
-    <div class="hint" id="hint">Нажми звуки в правильном порядке</div>
+    <div class="hint" id="hint">Собери последовательность из 4 звуков</div>
 
     <div class="grid">
       <button class="pad" data-id="1" aria-label="Pad 1"><span class="face">1</span></button>
@@ -304,7 +287,7 @@
       "4": "audio/s4.mp3",
     };
 
-    // верная последовательность: 2,4,3,1
+    // ✅ Верная последовательность
     const correctSequence = ["2","4","3","1"];
 
     // ===== ЛОГИКА =====
@@ -321,11 +304,9 @@
 
     let input = [];
     let currentlyPlayingId = null;
-    let hintTimer = null;
 
-    // ждём окончания последнего звука перед поп-апом
-    let pendingWin = false;
-    let pendingWinPadId = null;
+    // блокируем клики на время фейла/победы
+    let lockedUI = false;
 
     // ===== Конфетти =====
     const confettiCanvas = document.getElementById("confettiCanvas");
@@ -441,23 +422,19 @@
       clearPlaying();
     }
 
-    function play(id){
+    // ✅ всегда можно нажимать любые пэды — просто собираем 4 нажатия
+    // ✅ звук — моно: новый клик режет предыдущий
+    function play(id, onEnded){
       stopAllAudio();
       const a = audioMap.get(id);
-      if (!a) return;
+      if (!a) { if (onEnded) onEnded(); return; }
 
       setPlaying(id);
-
       a.onended = () => {
         if (currentlyPlayingId === id) clearPlaying();
-        if (pendingWin && pendingWinPadId === id) {
-          pendingWin = false;
-          pendingWinPadId = null;
-          openModalWithConfetti();
-        }
+        if (onEnded) onEnded();
       };
-
-      a.play().catch(()=>{});
+      a.play().catch(()=>{ if (onEnded) onEnded(); });
     }
 
     function lockPad(id){
@@ -469,40 +446,25 @@
       pads.forEach(p => p.classList.remove("locked"));
     }
 
-    function flashError(id){
-      const el = getPadEl(id);
-      if (!el) return;
-      el.classList.add("error");
-      setTimeout(() => el.classList.remove("error"), 1000);
+    function setAllFailOn(){
+      pads.forEach(p => p.classList.add("fail"));
+    }
+
+    function setAllFailOff(){
+      pads.forEach(p => p.classList.remove("fail"));
     }
 
     function setHint(text){
       hint.textContent = text;
     }
 
-    function setHintLater(text, ms){
-      if (hintTimer) clearTimeout(hintTimer);
-      hintTimer = setTimeout(() => {
-        hint.textContent = text;
-        hintTimer = null;
-      }, ms);
-    }
-
-    function resetProgress(updateHintText = true){
+    function resetProgress(){
       input = [];
       clearLocks();
+      setAllFailOff();
       stopAllAudio();
-      pendingWin = false;
-      pendingWinPadId = null;
-
-      if (updateHintText) setHint("Нажми звуки в правильном порядке");
-    }
-
-    function checkPrefix(){
-      for (let i = 0; i < input.length; i++){
-        if (input[i] !== correctSequence[i]) return false;
-      }
-      return true;
+      setHint("Собери последовательность из 4 звуков");
+      lockedUI = false;
     }
 
     function openModalWithConfetti(){
@@ -511,49 +473,58 @@
       runConfettiOnce();
     }
 
-    // ===== События =====
+    // ===== Основная логика =====
     pads.forEach(btn => {
       btn.addEventListener("click", () => {
-        if (pendingWin) return; // пока доигрывает последний звук
+        if (lockedUI) return;
 
         const id = btn.dataset.id;
 
-        play(id);
+        // добавляем шаг
         input.push(id);
 
-        if (!checkPrefix()){
-          flashError(id);
-          setHint("Мимо. Прогресс сброшен.");
-          resetProgress(false);
-          setHintLater("Нажми звуки в правильном порядке", 2000);
-          return;
-        }
-
+        // подсветка выбранного
         lockPad(id);
 
-        if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+        // играем звук
+        const isLastStep = (input.length === 4);
 
-        if (input.length === correctSequence.length){
-          setHint("Порядок собран ✅");
-          pendingWin = true;
-          pendingWinPadId = id;
+        // если это 4-й шаг — ждём окончания звука и потом решаем win/fail
+        play(id, () => {
+          if (!isLastStep) return;
 
-          // подстраховка, если по каким-то причинам звук не найден
-          const a = audioMap.get(id);
-          if (!a){
-            pendingWin = false;
-            pendingWinPadId = null;
+          lockedUI = true; // блокируем до решения
+
+          const isCorrect =
+            input.length === correctSequence.length &&
+            input.every((v, i) => v === correctSequence[i]);
+
+          if (isCorrect){
+            setHint("Порядок собран ✅");
             openModalWithConfetti();
+            return;
           }
-          return;
-        }
 
-        setHint(`Верно. Шаг ${input.length}/${correctSequence.length}`);
+          // ❌ неверная последовательность:
+          // все зелёные -> красные на 2 секунды, потом сброс
+          setHint("Не то. Пробуй ещё раз.");
+          setAllFailOn();
+          setTimeout(() => {
+            resetProgress();
+          }, 500);
+        });
+
+        // промежуточная подсказка
+        if (!isLastStep){
+          setHint(`Шаг ${input.length}/4`);
+        } else {
+          setHint("Проверяю последовательность…");
+        }
       });
     });
 
     // старт
-    resetProgress(true);
+    resetProgress();
   </script>
 </body>
 </html>
