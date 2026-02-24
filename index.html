@@ -483,6 +483,12 @@
         // добавляем шаг
         input.push(id);
 
+        // если шагов стало больше 4 — сразу сбрасываем
+if (input.length > 4) {
+  resetProgress();
+  return;
+}
+
         // подсветка выбранного
         lockPad(id);
 
@@ -528,5 +534,6 @@
   </script>
 </body>
 </html>
+
 
 
